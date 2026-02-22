@@ -88,6 +88,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    if (client.repositoryExists(name)) {
+        std::cerr << "Error: Repository '" << name << "' already exists on your GitHub account.\n";
+        return 1;
+    }
+    
     RepoInfo repo;
     repo.name = name;
     repo.description = description;

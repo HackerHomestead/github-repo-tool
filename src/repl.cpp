@@ -129,6 +129,12 @@ void REPL::processRepoCreation(const std::string& path) {
             std::cout << RED << "Invalid name. Use only letters, numbers, hyphens, and underscores.\n" << RESET;
             continue;
         }
+        
+        if (client_->repositoryExists(repoName)) {
+            std::cout << RED << "Repository '" << repoName << "' already exists on your GitHub account.\n" << RESET;
+            std::cout << YELLOW << "Please choose a different name.\n" << RESET;
+            continue;
+        }
         break;
     }
     
