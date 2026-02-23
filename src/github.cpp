@@ -9,6 +9,7 @@
  */
 
 #include "github.h"
+#include "constants.h"
 #include <iostream>
 #include <sstream>
 #include <nlohmann/json.hpp>
@@ -125,7 +126,7 @@ bool GitHubClient::createRepository(const RepoInfo& repo) {
  * @return true if repository exists, false otherwise
  */
 bool GitHubClient::repositoryExists(const std::string& name) {
-    auto [status, body] = request("GET", "/user/repos?per_page=100");
+    auto [status, body] = request("GET", "/user/repos?per_page=" + std::to_string(constants::API_REPOS_PER_PAGE));
     if (status == 200) {
         try {
             auto repos = json::parse(body);
@@ -148,7 +149,7 @@ bool GitHubClient::repositoryExists(const std::string& name) {
  */
 std::vector<RepoInfo> GitHubClient::listRepositories() {
     std::vector<RepoInfo> repos;
-    std::string nextPage = "/user/repos?per_page=100";
+    std::string nextPage = "/user/repos?per_page=" + std::to_string(constants::API_REPOS_PER_PAGE);
     
     while (!nextPage.empty()) {
         auto [status, body, headers] = requestWithHeaders("GET", nextPage);
