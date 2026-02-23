@@ -121,7 +121,18 @@ The tool uses SSH for git push operations. Make sure you have:
 
 ## Configuration
 
-- Token: `~/.gh-repo-create.json` or `GH_TOKEN` environment variable
+### Token File Format
+
+The token is stored in `~/.gh-repo-create.json`:
+
+```json
+{"token": "your_github_personal_access_token"}
+```
+
+Alternatively, use the `GH_TOKEN` environment variable.
+
+### Other Settings
+
 - History: `~/.gh-repo-create-history`
 - GitHub username fallback: `git config --global github.user <username>`
 

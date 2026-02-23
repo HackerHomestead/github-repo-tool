@@ -1,0 +1,166 @@
+.TH GH-REPO 1 "February 2026" "gh-repo-create" "User Commands"
+.SH NAME
+gh-repo \- Create and manage GitHub repositories from the command line
+
+.SH SYNOPSIS
+.B gh-repo
+[\fIOPTIONS\fR]
+
+.SH DESCRIPTION
+\fBgh-repo\fR is a C++ CLI tool for creating and managing GitHub repositories.
+It supports both interactive REPL mode and command-line flags.
+
+.SH OPTIONS
+
+.SS General Options
+\fB\-h\fR, \fB\-\-help\fR
+.RS
+Show help message and exit
+.RE
+
+.SS Repository Operations
+\fB\-p\fR, \fB\-\-path\fR \fI<dir>\fR
+.RS
+Path to local git repository (default: current directory)
+.RE
+
+\fB\-n\fR, \fB\-\-name\fR \fI<name>\fR
+.RS
+Repository name
+.RE
+
+\fB\-d\fR, \fB\-\-description\fR \fI<desc>\fR
+.RS
+Repository description (max 350 characters)
+.RE
+
+\fB\-\-public\fR
+.RS
+Make repository public
+.RE
+
+\fB\-\-private\fR
+.RS
+Make repository private
+.RE
+
+\fB\-l\fR, \fB\-\-list\fR
+.RS
+List all your GitHub repositories
+.RE
+
+\fB\-D\fR, \fB\-\-delete\fR \fI<name>\fR
+.RS
+Delete a repository by name
+.RE
+
+\fB\-\-ssh\-only\fR
+.RS
+Push via SSH only, skip GitHub API calls
+.RE
+
+.SH REPL COMMANDS
+
+When run without arguments, \fBgh-repo\fR enters interactive REPL mode:
+
+.TP
+\fBcreate\fR (\fBc\fR)
+Create a new GitHub repository
+.TP
+\fBlist\fR (\fBl\fR)
+List all your GitHub repositories
+.TP
+\fBdelete\fR (\fBd\fR)
+Delete a GitHub repository
+.TP
+\fBssh\fR (\fBs\fR)
+Push via SSH only (no API calls)
+.TP
+\fBauth\fR
+Manage authentication
+.TP
+\fBhelp\fR (\fB?\fR)
+Show help message
+.TP
+\fBexit\fR
+Exit the REPL
+
+.SH CONFIGURATION
+
+.SS Token Authentication
+
+The tool requires a GitHub Personal Access Token. Set it via:
+
+.TP
+Environment variable:
+.EX
+export GH_TOKEN="your_token"
+.EE
+
+.TP
+Or config file (~/.gh-repo-create.json):
+.EX
+{"token": "your_token"}
+.EE
+
+.SS Token Scope Requirements
+
+.TP
+Create/List: \fBrepo\fR scope
+.TP
+Delete: \fBdelete_repo\fR scope
+
+.SH FILES
+
+.TP
+~/.gh-repo-create.json
+Token configuration file
+.TP
+~/.gh-repo-create-history
+Command history (REPL mode)
+
+.SH EXAMPLES
+
+.SS Create a repository
+.EX
+gh-repo -p ./my-project -n my-repo --public
+.EE
+
+.SS List repositories
+.EX
+gh-repo --list
+.EE
+
+.SS Delete a repository
+.EX
+gh-repo --delete old-repo
+.EE
+
+.SS SSH-only push
+.EX
+gh-repo --ssh-only -p .
+.EE
+
+.SS Interactive mode
+.EX
+$ gh-repo
+gh-repo> list
+gh-repo> help
+gh-repo> exit
+.EE
+
+.SH BUGS
+
+Report bugs at: https://github.com/HackerHomestead/github-repo-tool/issues
+
+.SH AUTHOR
+
+Written by HackerHomestead
+
+.SH SEE ALSO
+
+git(1), ssh(1), github(7)
+
+.SH LICENSE
+
+MIT License

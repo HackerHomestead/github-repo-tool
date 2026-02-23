@@ -59,3 +59,14 @@ target_include_directories(test_gh_repo PRIVATE
     ${CMAKE_BINARY_DIR}/_deps/doctest-src
     /opt/homebrew/opt/openssl/include
 )
+
+# Installation
+include(GNUInstallDirs)
+
+install(TARGETS gh-repo RUNTIME DESTINATION bin)
+
+install(FILES docs/gh-repo.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+install(FILES README.md DESTINATION ${CMAKE_INSTALL_DOCDIR}/gh-repo)
+
+# Create config directory
+install(CODE "file(MAKE_DIRECTORY $ENV{HOME}/.gh-repo-create)")
