@@ -21,7 +21,7 @@ const std::string YELLOW = "\033[33m";
 const std::string GRAY = "\033[90m";
 
 const std::vector<std::string> COMMANDS = {
-    "create", "c", "list", "l", "delete", "d", "ssh", "s", "auth", "help", "exit", "quit", "?"
+    "create", "c", "list", "l", "delete", "d", "ssh", "s", "auth", "check", "debug", "help", "exit", "quit", "?"
 };
 
 std::string getHistoryPath() {
@@ -154,7 +154,7 @@ char** pathCompletion(const char* text, int start, int end) {
 }
 }
 
-REPL::REPL() : running_(false) {
+REPL::REPL() : running_(false), debug_(false) {
     config_ = std::make_unique<ConfigManager>();
     using_history();
     loadHistory();
@@ -180,6 +180,8 @@ void REPL::printHelp() {
     std::cout << "  " << GREEN << "list" << RESET << " (l)   - List your GitHub repositories\n";
     std::cout << "  " << GREEN << "delete" << RESET << " (d)  - Delete a GitHub repository\n";
     std::cout << "  " << GREEN << "ssh" << RESET << "        - Push via SSH only (no API calls)\n";
+    std::cout << "  " << GREEN << "check" << RESET << "      - Check system configuration\n";
+    std::cout << "  " << GREEN << "debug" << RESET << "      - Toggle debug mode\n";
     std::cout << "  " << GREEN << "auth" << RESET << "       - Manage authentication\n";
     std::cout << "  " << GREEN << "help" << RESET << "      - Show this help message\n";
     std::cout << "  " << GREEN << "exit" << RESET << "      - Exit the REPL\n";
@@ -258,6 +260,23 @@ void REPL::printHelpCheck() {
     std::cout << "  check              # Check current directory\n";
     std::cout << "  check ./my-project # Check specific path\n\n";
     std::cout << "CLI equivalent: --check\n";
+}
+
+void REPL::printHelpDebug() {
+    std::cout << BOLD << "debug - Toggle debug mode\n\n" << RESET;
+    std::cout << "Usage: debug [on|off]\n\n";
+    std::cout << "Arguments:\n";
+    std::cout << "  on   Enable debug mode\n";
+    std::cout << "  off  Disable debug mode\n\n";
+    std::cout << "Debug mode shows:\n";
+    std::cout << "  - API request details (sanitized)\n";
+    std::cout << "  - Token info (last 5 chars only)\n";
+    std::cout << "  - HTTP headers and status codes\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  debug on   # Enable debug output\n";
+    std::cout << "  debug off  # Disable debug output\n";
+    std::cout << "  debug      # Show current status\n\n";
+    std::cout << "CLI equivalent: --debug\n";
 }
 
 bool REPL::ensureAuth() {
@@ -701,6 +720,20 @@ void REPL::cmdCheck(const std::string& path) {
     }
 }
 
+void REPL::cmdDebug(const std::string& args) {
+    if (args == "on") {
+        debug_ = true;
+        std::cout << GREEN << "Debug mode enabled\n" << RESET;
+    } else if (args == "off") {
+        debug_ = false;
+        std::cout << "Debug mode disabled\n" << RESET;
+    } else if (args.empty()) {
+        std::cout << "Debug mode is " << (debug_ ? (GREEN + std::string("enabled") + RESET) : "disabled") << "\n";
+    } else {
+        std::cout << RED << "Usage: debug [on|off]\n" << RESET;
+    }
+}
+
 void REPL::runCommand(const std::string& input) {
     std::string cmd = trim(input);
     
@@ -724,6 +757,8 @@ void REPL::runCommand(const std::string& input) {
             printHelpAuth();
         } else if (args == "check") {
             printHelpCheck();
+        } else if (args == "debug") {
+            printHelpDebug();
         } else if (args.empty()) {
             printHelp();
         } else {
@@ -740,6 +775,8 @@ void REPL::runCommand(const std::string& input) {
         cmdSshOnly();
     } else if (command == "check") {
         cmdCheck(args);
+    } else if (command == "debug") {
+        cmdDebug(args);
     } else if (command == "auth") {
         cmdAuth();
     } else if (!command.empty()) {

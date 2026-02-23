@@ -55,6 +55,7 @@ Commands:
 - `delete` (or `d`) - Delete a GitHub repository
 - `ssh` (or `s`) - Push via SSH only (no API calls)
 - `check` - Check API and SSH connectivity
+- `debug` - Toggle debug mode (shows sanitized token info)
 - `auth` - Manage authentication
 - `help` - Show help
 - `exit` - Exit the REPL
@@ -76,6 +77,12 @@ Commands:
 
 # Push via SSH only (no API, uses existing origin remote)
 ./gh-repo --ssh-only -p .
+
+# Check system configuration
+./gh-repo --check
+
+# Enable debug output
+./gh-repo --debug --check
 ```
 
 #### Options
@@ -91,6 +98,7 @@ Commands:
 | `-D, --delete <name>` | Delete a repository by name |
 | `--ssh-only` | Skip GitHub API, just push via SSH |
 | `--check` | Check API and SSH connectivity |
+| `--debug` | Enable debug output (shows sanitized token info) |
 | `-h, --help` | Show help message |
 
 ## Authentication

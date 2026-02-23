@@ -6,6 +6,13 @@
 #include <string>
 #include <cstring>
 
+std::string safeToken(const std::string& token) {
+    if (token.length() <= 5) {
+        return "****";
+    }
+    return "*****" + token.substr(token.length() - 5);
+}
+
 void printUsage(const char* progName) {
     std::cout << R"(gh-repo-create - Create GitHub repositories from the command line
 
@@ -45,11 +52,14 @@ int main(int argc, char* argv[]) {
     bool listRepos = false;
     bool sshOnly = false;
     bool runCheck = false;
+    bool debugMode = false;
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             printUsage(argv[0]);
             return 0;
+        } else if (strcmp(argv[i], "--debug") == 0) {
+            debugMode = true;
         } else if (strcmp(argv[i], "--check") == 0) {
             runCheck = true;
         } else if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--path") == 0) && i + 1 < argc) {
@@ -71,10 +81,16 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    if (path.empty()) path = ".";
-    
     ConfigManager config;
+    
+    if (debugMode) {
+        std::cerr << "[DEBUG] Debug mode enabled\n";
+        std::cerr << "[DEBUG] Token: " << safeToken(config.loadToken().value_or("")) << "\n";
+    }
+    
     auto token = config.loadToken();
+    
+    if (path.empty()) path = ".";
     
     if (runCheck) {
         const std::string RESET = "\033[0m";
