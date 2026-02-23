@@ -21,12 +21,14 @@ private:
     void printHelpDelete();
     void printHelpSsh();
     void printHelpAuth();
+    void printHelpCheck();
     bool ensureAuth();
     void cmdCreate();
     void cmdAuth();
     void cmdList(const std::string& filter = "");
     void cmdDelete();
     void cmdSshOnly();
+    void cmdCheck(const std::string& path = ".");
     void processRepoCreation(const std::string& path);
     
     std::unique_ptr<GitHubClient> client_;

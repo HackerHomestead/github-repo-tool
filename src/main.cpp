@@ -44,11 +44,14 @@ int main(int argc, char* argv[]) {
     bool isPrivate = false;
     bool listRepos = false;
     bool sshOnly = false;
+    bool runCheck = false;
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             printUsage(argv[0]);
             return 0;
+        } else if (strcmp(argv[i], "--check") == 0) {
+            runCheck = true;
         } else if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--path") == 0) && i + 1 < argc) {
             path = argv[++i];
         } else if ((strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--name") == 0) && i + 1 < argc) {
@@ -72,6 +75,100 @@ int main(int argc, char* argv[]) {
     
     ConfigManager config;
     auto token = config.loadToken();
+    
+    if (runCheck) {
+        const std::string RESET = "\033[0m";
+        const std::string BOLD = "\033[1m";
+        const std::string GREEN = "\033[32m";
+        const std::string RED = "\033[31m";
+        const std::string YELLOW = "\033[33m";
+        const std::string GRAY = "\033[90m";
+        
+        std::cout << "\n" << BOLD << "System Check" << RESET << "\n";
+        std::cout << std::string(40, '-') << "\n\n";
+        
+        bool allPassed = true;
+        
+        std::cout << BOLD << "1. GitHub API Access\n" << RESET;
+        if (!token.has_value()) {
+            std::cout << RED << "   [FAIL] " << RESET << "No GitHub token found\n";
+            std::cout << GRAY << "   -> Set GH_TOKEN environment variable or add token to ~/.gh-repo-create.json\n" << RESET;
+            std::cout << GRAY << "   -> See: https://github.com/settings/tokens\n" << RESET;
+            allPassed = false;
+        } else {
+            GitHubClient client(token.value());
+            if (client.authenticate()) {
+                std::cout << GREEN << "   [PASS] " << RESET << "Authenticated as: " << client.getUsername() << "\n";
+            } else {
+                std::cout << RED << "   [FAIL] " << RESET << "Authentication failed - invalid token\n";
+                std::cout << GRAY << "   -> Your token may have expired or been revoked\n" << RESET;
+                std::cout << GRAY << "   -> Generate a new token at: https://github.com/settings/tokens\n" << RESET;
+                allPassed = false;
+            }
+        }
+        std::cout << "\n";
+        
+        std::cout << BOLD << "2. GitHub SSH Access\n" << RESET;
+        FILE* pipe = popen("ssh -T git@github.com 2>&1", "r");
+        if (pipe) {
+            char buffer[256] = {0};
+            std::string output;
+            while (fgets(buffer, sizeof(buffer), pipe)) {
+                output += buffer;
+            }
+            pclose(pipe);
+            
+            if (output.find("successfully authenticated") != std::string::npos || 
+                output.find("You've successfully authenticated") != std::string::npos) {
+                std::cout << GREEN << "   [PASS] " << RESET << "SSH access to GitHub working\n";
+            } else {
+                std::cout << RED << "   [FAIL] " << RESET << "SSH access not configured\n";
+                std::cout << GRAY << "   -> Add SSH key to GitHub: Settings > SSH and GPG keys\n" << RESET;
+                std::cout << GRAY << "   -> Run: ssh-add ~/.ssh/id_ed25519\n" << RESET;
+                allPassed = false;
+            }
+        } else {
+            std::cout << RED << "   [FAIL] " << RESET << "Could not test SSH\n";
+            allPassed = false;
+        }
+        std::cout << "\n";
+        
+        std::cout << BOLD << "3. Local Git Repository\n" << RESET;
+        if (GitUtils::isGitRepo(path)) {
+            std::cout << GREEN << "   [PASS] " << RESET << path << " is a git repository\n";
+            
+            if (GitUtils::hasRemote(path, "origin")) {
+                auto remoteUrl = GitUtils::getRemoteUrl(path, "origin");
+                if (remoteUrl.has_value()) {
+                    std::cout << GREEN << "   [PASS] " << RESET << "Origin remote: " << remoteUrl.value() << "\n";
+                }
+            } else {
+                std::cout << YELLOW << "   [WARN] " << RESET << "No 'origin' remote configured\n";
+            }
+        } else {
+            std::cout << YELLOW << "   [SKIP] " << RESET << path << " is not a git repository\n";
+        }
+        std::cout << "\n";
+        
+        if (token.has_value()) {
+            std::cout << BOLD << "4. Token Permissions\n" << RESET;
+            GitHubClient client(token.value());
+            client.authenticate();
+            auto repos = client.listRepositories();
+            std::cout << GREEN << "   [PASS] " << RESET << "List repositories: OK (" << repos.size() << " repos)\n";
+            std::cout << GRAY << "   Token has 'repo' scope\n" << RESET;
+            std::cout << "\n";
+        }
+        
+        std::cout << std::string(40, '-') << "\n";
+        if (allPassed) {
+            std::cout << GREEN << BOLD << "All checks passed! You have full CRUD access.\n" << RESET;
+            return 0;
+        } else {
+            std::cout << RED << BOLD << "Some checks failed. See errors above.\n" << RESET;
+            return 1;
+        }
+    }
     
     if (sshOnly) {
         if (!GitUtils::isGitRepo(path)) {

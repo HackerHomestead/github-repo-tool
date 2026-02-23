@@ -1,3 +1,13 @@
+/**
+ * @file github.cpp
+ * @brief GitHub API client implementation
+ * 
+ * Provides functionality to interact with GitHub's REST API including:
+ * - Authentication
+ * - Repository creation, listing, and deletion
+ * - Username retrieval with fallback to git config
+ */
+
 #include "github.h"
 #include <iostream>
 #include <sstream>
@@ -6,8 +16,23 @@
 
 using json = nlohmann::json;
 
+// ============================================================================
+// Constructors
+// ============================================================================
+
 GitHubClient::GitHubClient(const std::string& token) : token_(token) {}
 
+// ============================================================================
+// Authentication
+// ============================================================================
+
+/**
+ * @brief Authenticates with GitHub API using the stored token
+ * @return true if authentication successful, false otherwise
+ * 
+ * Makes a request to /user endpoint to validate the token.
+ * On success, caches the username for future use.
+ */
 bool GitHubClient::authenticate() {
     auto [status, body] = request("GET", "/user");
     if (status == 200) {
@@ -22,11 +47,22 @@ bool GitHubClient::authenticate() {
     return false;
 }
 
+/**
+ * @brief Gets the authenticated username
+ * @return Username string, or empty string if unavailable
+ * 
+ * Priority:
+ * 1. Cached username from previous authentication
+ * 2. Fetch from GitHub API /user endpoint
+ * 3. Fallback to git global config (github.user)
+ */
 std::string GitHubClient::getUsername() {
+    // Return cached username if available
     if (username_.has_value() && !username_->empty()) {
         return *username_;
     }
     
+    // Try to fetch from GitHub API
     auto [status, body] = request("GET", "/user");
     if (status == 200) {
         try {
@@ -39,15 +75,15 @@ std::string GitHubClient::getUsername() {
         } catch (const std::exception& e) {
             std::cerr << "Error parsing username response: " << e.what() << "\n";
         }
-    } else {
-        std::cerr << "Error fetching username from API: HTTP " << status << "\n";
     }
     
+    // Fallback to git config
     FILE* pipe = popen("git config --global github.user 2>/dev/null", "r");
     if (pipe) {
         char buffer[256] = {0};
         if (fgets(buffer, sizeof(buffer), pipe)) {
             std::string gitUser = buffer;
+            // Trim whitespace
             gitUser.erase(gitUser.find_last_not_of(" \n\r") + 1);
             if (!gitUser.empty()) {
                 username_ = gitUser;
@@ -62,6 +98,15 @@ std::string GitHubClient::getUsername() {
     return username_.value_or("");
 }
 
+// ============================================================================
+// Repository Operations
+// ============================================================================
+
+/**
+ * @brief Creates a new repository on GitHub
+ * @param repo Repository information (name, description, visibility)
+ * @return true if creation successful, false otherwise
+ */
 bool GitHubClient::createRepository(const RepoInfo& repo) {
     json body = {
         {"name", repo.name},
@@ -74,6 +119,11 @@ bool GitHubClient::createRepository(const RepoInfo& repo) {
     return status == 201;
 }
 
+/**
+ * @brief Checks if a repository exists in the user's account
+ * @param name Repository name to check
+ * @return true if repository exists, false otherwise
+ */
 bool GitHubClient::repositoryExists(const std::string& name) {
     auto [status, body] = request("GET", "/user/repos?per_page=100");
     if (status == 200) {
@@ -89,6 +139,13 @@ bool GitHubClient::repositoryExists(const std::string& name) {
     return false;
 }
 
+/**
+ * @brief Lists all repositories for the authenticated user
+ * @return Vector of RepoInfo structs containing repository details
+ * 
+ * Handles pagination automatically by following the Link header.
+ * Each page requests up to 100 repositories.
+ */
 std::vector<RepoInfo> GitHubClient::listRepositories() {
     std::vector<RepoInfo> repos;
     std::string nextPage = "/user/repos?per_page=100";
@@ -106,6 +163,7 @@ std::vector<RepoInfo> GitHubClient::listRepositories() {
             for (const auto& r : data) {
                 RepoInfo info;
                 info.name = r.value("name", "");
+                // Handle null descriptions safely
                 if (r.contains("description") && !r["description"].is_null()) {
                     info.description = r["description"].get<std::string>();
                 }
@@ -118,11 +176,11 @@ std::vector<RepoInfo> GitHubClient::listRepositories() {
             break;
         }
         
+        // Parse pagination Link header
         nextPage.clear();
         auto linkIt = headers.find("Link");
         if (linkIt != headers.end()) {
             std::string linkHeader = linkIt->second;
-            std::cerr << "Link header: " << linkHeader.substr(0, 200) << "\n";
             size_t nextPos = linkHeader.find("rel=\"next\"");
             if (nextPos != std::string::npos) {
                 size_t start = linkHeader.rfind("<", nextPos);
@@ -132,7 +190,6 @@ std::vector<RepoInfo> GitHubClient::listRepositories() {
                     size_t queryPos = url.find("/user/repos");
                     if (queryPos != std::string::npos) {
                         nextPage = url.substr(queryPos);
-                        std::cerr << "Next page: " << nextPage << "\n";
                     }
                 }
             }
@@ -141,6 +198,13 @@ std::vector<RepoInfo> GitHubClient::listRepositories() {
     return repos;
 }
 
+/**
+ * @brief Deletes a repository from GitHub
+ * @param name Repository name to delete
+ * @return true if deletion successful, false otherwise
+ * 
+ * Note: Requires token with delete_repo scope
+ */
 bool GitHubClient::deleteRepository(const std::string& name) {
     std::string owner = getUsername();
     if (owner.empty()) {
@@ -151,6 +215,17 @@ bool GitHubClient::deleteRepository(const std::string& name) {
     return status == 204;
 }
 
+// ============================================================================
+// HTTP Request Helpers
+// ============================================================================
+
+/**
+ * @brief Makes an HTTP request to GitHub API
+ * @param method HTTP method (GET, POST, DELETE)
+ * @param path API endpoint path
+ * @param body Request body for POST requests
+ * @return Pair of status code and response body
+ */
 std::pair<int, std::string> GitHubClient::request(const std::string& method, 
                                                     const std::string& path,
                                                     const std::string& body) {
@@ -158,9 +233,17 @@ std::pair<int, std::string> GitHubClient::request(const std::string& method,
     return {status, response};
 }
 
-std::tuple<int, std::string, std::unordered_map<std::string, std::string>> GitHubClient::requestWithHeaders(const std::string& method, 
-                                                    const std::string& path,
-                                                    const std::string& body) {
+/**
+ * @brief Makes an HTTP request with full header response
+ * @param method HTTP method
+ * @param path API endpoint path
+ * @param body Request body
+ * @return Tuple of status code, response body, and headers
+ */
+std::tuple<int, std::string, std::unordered_map<std::string, std::string>> 
+GitHubClient::requestWithHeaders(const std::string& method, 
+                                    const std::string& path,
+                                    const std::string& body) {
     httplib::Client cli(apiBase_);
     cli.set_default_headers({
         {"Authorization", "Bearer " + token_},
@@ -176,6 +259,7 @@ std::tuple<int, std::string, std::unordered_map<std::string, std::string>> GitHu
         return {-1, "Network error", {}};
     }
     
+    // Convert headers to map (lowercase keys for case-insensitive lookup)
     std::unordered_map<std::string, std::string> headers;
     for (const auto& h : res->headers) {
         headers[h.first] = h.second;

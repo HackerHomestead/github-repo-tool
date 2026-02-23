@@ -54,8 +54,11 @@ TEST_CASE("GitUtils - isGitRepo") {
 }
 
 TEST_CASE("GitUtils - hasRemote") {
-    CHECK(GitUtils::hasRemote("/Users/handy/projects/github-repo-tool", "origin") == false);
-    CHECK(GitUtils::hasRemote("/Users/handy/projects/github-repo-tool", "nonexistent") == false);
+    CHECK(GitUtils::hasRemote("/tmp/test-no-remote", "origin") == false);
+    CHECK(GitUtils::hasRemote("/tmp/test-no-remote", "nonexistent") == false);
+    fs::create_directories("/tmp/test-no-remote");
+    CHECK(GitUtils::hasRemote("/tmp/test-no-remote", "nonexistent") == false);
+    fs::remove_all("/tmp/test-no-remote");
 }
 
 TEST_CASE("GitUtils - getCurrentBranch") {

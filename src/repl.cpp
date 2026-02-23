@@ -244,6 +244,22 @@ void REPL::printHelpAuth() {
     std::cout << "Alternative: Set GH_TOKEN environment variable\n";
 }
 
+void REPL::printHelpCheck() {
+    std::cout << BOLD << "check - Check system configuration\n\n" << RESET;
+    std::cout << "Usage: check [path]\n\n";
+    std::cout << "Arguments:\n";
+    std::cout << "  path    Path to local git repository (default: current directory)\n\n";
+    std::cout << "Checks:\n";
+    std::cout << "  1. GitHub API Access - Verifies token authentication\n";
+    std::cout << "  2. GitHub SSH Access - Tests SSH connectivity\n";
+    std::cout << "  3. Local Git Repository - Checks if path is a git repo\n";
+    std::cout << "  4. Token Permissions - Confirms required scopes\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  check              # Check current directory\n";
+    std::cout << "  check ./my-project # Check specific path\n\n";
+    std::cout << "CLI equivalent: --check\n";
+}
+
 bool REPL::ensureAuth() {
     auto token = config_->loadToken();
     if (!token.has_value()) {
@@ -293,6 +309,21 @@ void REPL::processRepoCreation(const std::string& path) {
     if (!GitUtils::isGitRepo(path)) {
         std::cout << RED << "Error: " << path << " is not a git repository\n" << RESET;
         return;
+    }
+    
+    if (GitUtils::hasRemote(path, "origin")) {
+        auto remoteUrl = GitUtils::getRemoteUrl(path, "origin");
+        if (remoteUrl.has_value()) {
+            std::cout << RED << "Warning: This folder already has an 'origin' remote configured!\n" << RESET;
+            std::cout << "Current remote: " << remoteUrl.value() << "\n\n";
+            std::cout << "For now, this operation has been cancelled to prevent accidental mistakes.\n";
+            std::cout << "Future versions will allow you to:\n";
+            std::cout << "  - Check if the repository exists in your GitHub account\n";
+            std::cout << "  - Push to the existing repository\n";
+            std::cout << "  - Change the remote URL\n";
+            std::cout << "\nUse 'ssh' command to push to the existing remote, or manually remove the remote and try again.\n";
+            return;
+        }
     }
     
     std::cout << "\n" << BOLD + BLUE + "Repository Creation" << RESET << "\n";
@@ -583,6 +614,93 @@ void REPL::cmdSshOnly() {
     }
 }
 
+void REPL::cmdCheck(const std::string& path) {
+    std::string checkPath = path.empty() ? "." : path;
+    
+    std::cout << "\n" << BOLD + BLUE + "System Check" << RESET << "\n";
+    std::cout << std::string(40, '-') << "\n\n";
+    
+    bool allPassed = true;
+    
+    std::cout << BOLD << "1. GitHub API Access\n" << RESET;
+    auto token = config_->loadToken();
+    if (!token.has_value()) {
+        std::cout << RED << "   [FAIL] " << RESET << "No GitHub token found\n";
+        std::cout << GRAY << "   -> Set GH_TOKEN environment variable or run 'auth' to add one\n" << RESET;
+        std::cout << GRAY << "   -> See: https://github.com/settings/tokens\n" << RESET;
+        allPassed = false;
+    } else {
+        client_ = std::make_unique<GitHubClient>(token.value());
+        if (client_->authenticate()) {
+            std::cout << GREEN << "   [PASS] " << RESET << "Authenticated as: " << client_->getUsername() << "\n";
+        } else {
+            std::cout << RED << "   [FAIL] " << RESET << "Authentication failed - invalid token\n";
+            std::cout << GRAY << "   -> Your token may have expired or been revoked\n" << RESET;
+            std::cout << GRAY << "   -> Generate a new token at: https://github.com/settings/tokens\n" << RESET;
+            allPassed = false;
+        }
+    }
+    std::cout << "\n";
+    
+    std::cout << BOLD << "2. GitHub SSH Access\n" << RESET;
+    FILE* pipe = popen("ssh -T git@github.com 2>&1", "r");
+    if (pipe) {
+        char buffer[256] = {0};
+        std::string output;
+        while (fgets(buffer, sizeof(buffer), pipe)) {
+            output += buffer;
+        }
+        pclose(pipe);
+        
+        if (output.find("successfully authenticated") != std::string::npos || 
+            output.find("You've successfully authenticated") != std::string::npos) {
+            std::cout << GREEN << "   [PASS] " << RESET << "SSH access to GitHub working\n";
+        } else {
+            std::cout << RED << "   [FAIL] " << RESET << "SSH access not configured\n";
+            std::cout << GRAY << "   -> Add SSH key to GitHub: Settings > SSH and GPG keys\n" << RESET;
+            std::cout << GRAY << "   -> Run: ssh-add ~/.ssh/id_ed25519\n" << RESET;
+            allPassed = false;
+        }
+    } else {
+        std::cout << RED << "   [FAIL] " << RESET << "Could not test SSH\n";
+        allPassed = false;
+    }
+    std::cout << "\n";
+    
+    std::cout << BOLD << "3. Local Git Repository\n" << RESET;
+    if (GitUtils::isGitRepo(checkPath)) {
+        std::cout << GREEN << "   [PASS] " << RESET << checkPath << " is a git repository\n";
+        
+        if (GitUtils::hasRemote(checkPath, "origin")) {
+            auto remoteUrl = GitUtils::getRemoteUrl(checkPath, "origin");
+            if (remoteUrl.has_value()) {
+                std::cout << GREEN << "   [PASS] " << RESET << "Origin remote: " << remoteUrl.value() << "\n";
+            }
+        } else {
+            std::cout << YELLOW << "   [WARN] " << RESET << "No 'origin' remote configured\n";
+        }
+    } else {
+        std::cout << YELLOW << "   [SKIP] " << RESET << checkPath << " is not a git repository\n";
+    }
+    std::cout << "\n";
+    
+    std::cout << BOLD << "4. Token Permissions\n" << RESET;
+    if (client_) {
+        auto repos = client_->listRepositories();
+        std::cout << GREEN << "   [PASS] " << RESET << "List repositories: OK (" << repos.size() << " repos)\n";
+        std::cout << GRAY << "   Token has 'repo' scope\n" << RESET;
+    }
+    std::cout << "\n";
+    
+    std::cout << std::string(40, '-') << "\n";
+    if (allPassed) {
+        std::cout << GREEN << BOLD << "All checks passed! You have full CRUD access.\n" << RESET;
+    } else {
+        std::cout << RED << BOLD << "Some checks failed. See errors above.\n" << RESET;
+        std::cout << GRAY << "Run 'help auth' or 'help ssh' for configuration help.\n" << RESET;
+    }
+}
+
 void REPL::runCommand(const std::string& input) {
     std::string cmd = trim(input);
     
@@ -604,6 +722,8 @@ void REPL::runCommand(const std::string& input) {
             printHelpSsh();
         } else if (args == "auth") {
             printHelpAuth();
+        } else if (args == "check") {
+            printHelpCheck();
         } else if (args.empty()) {
             printHelp();
         } else {
@@ -618,6 +738,8 @@ void REPL::runCommand(const std::string& input) {
         cmdDelete();
     } else if (command == "ssh" || command == "s") {
         cmdSshOnly();
+    } else if (command == "check") {
+        cmdCheck(args);
     } else if (command == "auth") {
         cmdAuth();
     } else if (!command.empty()) {

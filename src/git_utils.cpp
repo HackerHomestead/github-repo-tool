@@ -42,6 +42,12 @@ bool GitUtils::hasRemote(const std::string& path, const std::string& remoteName)
     return runCommandExit(cmd) == 0;
 }
 
+std::optional<std::string> GitUtils::getRemoteUrl(const std::string& path, const std::string& remoteName) {
+    std::string cmd = "cd \"" + path + "\" && git remote get-url " + remoteName + " 2>/dev/null";
+    std::string url = runCommand(cmd);
+    return url.empty() ? std::nullopt : std::make_optional(url);
+}
+
 bool GitUtils::addRemote(const std::string& path, const std::string& name, const std::string& url) {
     std::string cmd = "cd \"" + path + "\" && git remote add " + name + " " + url;
     return runCommandExit(cmd) == 0;

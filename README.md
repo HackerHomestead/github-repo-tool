@@ -9,9 +9,11 @@ A modern C++ CLI tool for creating and managing GitHub repositories from the com
 - **GitHub API Integration** - Creates, lists, and deletes repos via GitHub REST API
 - **SSH Push Support** - Automatically adds remote and pushes your code via SSH
 - **SSH-Only Mode** - Push to existing repos without GitHub API (no token needed)
+- **System Check** - Verify API and SSH access with `--check` or `check` command
 - **Token Authentication** - Securely stores your GitHub Personal Access Token
 - **Command History** - Persistent history across sessions (saved to `~/.gh-repo-create-history`)
 - **Tab Autocomplete** - Auto-complete commands and file paths
+- **Smart Create** - Warns if folder already has a remote configured
 
 ## Prerequisites (macOS)
 
@@ -52,6 +54,7 @@ Commands:
 - `list` (or `l`) - List your GitHub repositories
 - `delete` (or `d`) - Delete a GitHub repository
 - `ssh` (or `s`) - Push via SSH only (no API calls)
+- `check` - Check API and SSH connectivity
 - `auth` - Manage authentication
 - `help` - Show help
 - `exit` - Exit the REPL
@@ -87,6 +90,7 @@ Commands:
 | `-l, --list` | List all your GitHub repositories |
 | `-D, --delete <name>` | Delete a repository by name |
 | `--ssh-only` | Skip GitHub API, just push via SSH |
+| `--check` | Check API and SSH connectivity |
 | `-h, --help` | Show help message |
 
 ## Authentication
