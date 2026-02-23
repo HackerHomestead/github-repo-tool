@@ -8,6 +8,8 @@
 #include <readline/history.h>
 #include <algorithm>
 #include <cctype>
+#include <wordexp.h>
+#include <vector>
 
 namespace {
 const std::string RESET = "\033[0m";
@@ -17,6 +19,63 @@ const std::string GREEN = "\033[32m";
 const std::string RED = "\033[31m";
 const std::string YELLOW = "\033[33m";
 const std::string GRAY = "\033[90m";
+
+const std::vector<std::string> COMMANDS = {
+    "create", "c", "list", "l", "delete", "d", "ssh", "s", "auth", "help", "exit", "quit", "?"
+};
+
+std::string getHistoryPath() {
+    const char* home = std::getenv("HOME");
+    if (home) {
+        return std::string(home) + "/.gh-repo-create-history";
+    }
+    return ".gh-repo-create-history";
+}
+
+void loadHistory() {
+    std::string path = getHistoryPath();
+    read_history(path.c_str());
+}
+
+void saveHistory() {
+    std::string path = getHistoryPath();
+    write_history(path.c_str());
+    history_truncate_file(path.c_str(), 100);
+}
+
+char* commandGenerator(const char* text, int state) {
+    static size_t idx = 0;
+    if (state == 0) {
+        idx = 0;
+    }
+    
+    while (idx < COMMANDS.size()) {
+        std::string cmd = COMMANDS[idx++];
+        if (cmd.find(text) == 0) {
+            return strdup(cmd.c_str());
+        }
+    }
+    return nullptr;
+}
+
+char** commandCompletion(const char* text, int start, int end);
+char** pathCompletion(const char* text, int start, int end);
+
+char** commandCompletion(const char* text, int start, int end) {
+    if (start == 0) {
+        return rl_completion_matches(text, commandGenerator);
+    }
+    
+    if (start > 0) {
+        std::string before = std::string(rl_line_buffer, start);
+        if (before.find("create") == 0 || before.find("c ") == 0 || 
+            before.find("ssh") == 0 || before.find("s ") == 0) {
+            return pathCompletion(text, start, end);
+        }
+    }
+    
+    return nullptr;
+}
 
 std::string trim(const std::string& s) {
     auto start = s.begin();
@@ -33,10 +92,73 @@ bool isValidRepoName(const std::string& name) {
     }
     return true;
 }
+
+char** pathCompletion(const char* text, int start, int end);
+
+char** pathCompletion(const char* text, int start, int end) {
+    rl_attempted_completion_over = 1;
+    
+    std::string input(text);
+    std::string dir = ".";
+    std::string prefix;
+    
+    size_t lastSlash = input.find_last_of('/');
+    if (lastSlash != std::string::npos) {
+        dir = input.substr(0, lastSlash);
+        if (dir.empty()) dir = "/";
+        prefix = input.substr(lastSlash + 1);
+    } else {
+        prefix = input;
+    }
+    
+    char** matches = nullptr;
+    wordexp_t p;
+    if (wordexp((dir + "/*").c_str(), &p, 0) == 0) {
+        size_t count = 0;
+        for (size_t i = 0; i < p.we_wordc; i++) {
+            std::string path = p.we_wordv[i];
+            std::string name = path.substr(path.find_last_of('/') + 1);
+            if (prefix.empty() || name.find(prefix) == 0) {
+                count++;
+            }
+        }
+        
+        if (count > 0) {
+            matches = (char**)malloc((count + 1) * sizeof(char*));
+            size_t idx = 0;
+            for (size_t i = 0; i < p.we_wordc; i++) {
+                std::string path = p.we_wordv[i];
+                std::string name = path.substr(path.find_last_of('/') + 1);
+                if (prefix.empty() || name.find(prefix) == 0) {
+                    bool isDir = false;
+                    if (path.back() == '/') {
+                        isDir = true;
+                        path = path.substr(0, path.length() - 1);
+                    }
+                    std::string match = path + (isDir ? "/" : "");
+                    matches[idx++] = strdup(match.c_str());
+                }
+            }
+            matches[count] = nullptr;
+        }
+        wordfree(&p);
+    }
+    
+    if (!matches && !prefix.empty()) {
+        matches = (char**)malloc(2 * sizeof(char*));
+        matches[0] = strdup((prefix + "/").c_str());
+        matches[1] = nullptr;
+    }
+    
+    return matches;
+}
 }
 
 REPL::REPL() : running_(false) {
     config_ = std::make_unique<ConfigManager>();
+    using_history();
+    loadHistory();
+    rl_attempted_completion_function = commandCompletion;
 }
 
 void REPL::printBanner() {
@@ -55,6 +177,9 @@ void REPL::printBanner() {
 void REPL::printHelp() {
     std::cout << BOLD << "Available commands:\n" << RESET;
     std::cout << "  " << GREEN << "create" << RESET << " (c)  - Create a new GitHub repository\n";
+    std::cout << "  " << GREEN << "list" << RESET << " (l)   - List your GitHub repositories\n";
+    std::cout << "  " << GREEN << "delete" << RESET << " (d)  - Delete a GitHub repository\n";
+    std::cout << "  " << GREEN << "ssh" << RESET << "        - Push via SSH only (no API calls)\n";
     std::cout << "  " << GREEN << "auth" << RESET << "       - Manage authentication\n";
     std::cout << "  " << GREEN << "help" << RESET << "      - Show this help message\n";
     std::cout << "  " << GREEN << "exit" << RESET << "      - Exit the REPL\n";
@@ -200,29 +325,22 @@ void REPL::processRepoCreation(const std::string& path) {
     if (client_->createRepository(repo)) {
         std::cout << GREEN << "Repository created successfully!\n" << RESET;
         
-        char* pushConfirm = readline("Push to GitHub? (y/n): ");
-        if (!pushConfirm) return;
-        std::string pushStr = trim(pushConfirm);
-        free(pushConfirm);
+        std::string sshUrl = "git@github.com:" + client_->getUsername() + "/" + repoName + ".git";
         
-        if (pushStr == "y" || pushStr == "Y") {
-            std::string sshUrl = "git@github.com:" + client_->getUsername() + "/" + repoName + ".git";
-            
-            if (GitUtils::hasRemote(path, "origin")) {
-                GitUtils::setRemoteUrl(path, "origin", sshUrl);
-                std::cout << "Updated 'origin' remote\n";
+        if (GitUtils::hasRemote(path, "origin")) {
+            GitUtils::setRemoteUrl(path, "origin", sshUrl);
+            std::cout << "Updated 'origin' remote\n";
+        } else {
+            GitUtils::addRemote(path, "origin", sshUrl);
+            std::cout << "Added 'origin' remote\n";
+        }
+        
+        auto branch = GitUtils::getCurrentBranch(path);
+        if (branch.has_value()) {
+            if (GitUtils::push(path, "origin", branch.value())) {
+                std::cout << GREEN << "Pushed successfully!\n" << RESET;
             } else {
-                GitUtils::addRemote(path, "origin", sshUrl);
-                std::cout << "Added 'origin' remote\n";
-            }
-            
-            auto branch = GitUtils::getCurrentBranch(path);
-            if (branch.has_value()) {
-                if (GitUtils::push(path, "origin", branch.value())) {
-                    std::cout << GREEN << "Pushed successfully!\n" << RESET;
-                } else {
-                    std::cout << RED << "Push failed.\n" << RESET;
-                }
+                std::cout << RED << "Push failed.\n" << RESET;
             }
         }
     } else {
@@ -249,6 +367,139 @@ void REPL::cmdCreate() {
     processRepoCreation(path);
 }
 
+void REPL::cmdList() {
+    if (!ensureAuth()) return;
+    
+    auto repos = client_->listRepositories();
+    
+    if (repos.empty()) {
+        std::cout << YELLOW << "No repositories found.\n" << RESET;
+        return;
+    }
+    
+    std::cout << "\n" << BOLD << "Your Repositories:\n" << RESET;
+    std::cout << std::string(60, '-') << "\n";
+    
+    for (const auto& repo : repos) {
+        std::string visibility = repo.isPrivate ? RED + "private" + RESET : GREEN + "public" + RESET;
+        std::cout << BOLD << repo.name << RESET << " [" << visibility << "]\n";
+        if (!repo.description.empty()) {
+            std::cout << GRAY << "  " << repo.description << "\n" << RESET;
+        }
+        std::cout << GRAY << "  " << repo.htmlUrl << "\n" << RESET;
+        std::cout << "\n";
+    }
+    
+    std::cout << "Total: " << repos.size() << " repository(ies)\n";
+}
+
+void REPL::cmdDelete() {
+    if (!ensureAuth()) return;
+    
+    auto repos = client_->listRepositories();
+    
+    if (repos.empty()) {
+        std::cout << YELLOW << "No repositories to delete.\n" << RESET;
+        return;
+    }
+    
+    std::cout << "\n" << BOLD + RED + "Delete Repository" << RESET << "\n";
+    std::cout << std::string(40, '-') << "\n";
+    
+    std::cout << "Select a repository to delete:\n\n";
+    for (size_t i = 0; i < repos.size(); i++) {
+        std::cout << "  " << (i + 1) << ". " << repos[i].name << "\n";
+    }
+    std::cout << "\n  0. Cancel\n";
+    
+    std::string choice;
+    while (true) {
+        char* input = readline("Choose (number): ");
+        if (!input) return;
+        choice = trim(input);
+        free(input);
+        
+        if (choice == "0") {
+            std::cout << "Cancelled.\n";
+            return;
+        }
+        
+        int idx = std::stoi(choice) - 1;
+        if (idx < 0 || idx >= static_cast<int>(repos.size())) {
+            std::cout << RED << "Invalid selection. Try again.\n" << RESET;
+            continue;
+        }
+        
+        std::string repoName = repos[idx].name;
+        std::cout << RED << "\nWARNING: This will permanently delete '" << repoName << "'!\n" << RESET;
+        std::cout << "This action cannot be undone.\n\n";
+        
+        char* confirm = readline("Type the repository name to confirm: ");
+        if (!confirm) return;
+        std::string confirmName = trim(confirm);
+        free(confirm);
+        
+        if (confirmName != repoName) {
+            std::cout << RED << "Confirmation failed. Deletion cancelled.\n" << RESET;
+            return;
+        }
+        
+        std::cout << YELLOW << "Deleting repository...\n" << RESET;
+        
+        if (client_->deleteRepository(repoName)) {
+            std::cout << GREEN << "Repository '" << repoName << "' deleted successfully!\n" << RESET;
+        } else {
+            std::cout << RED << "Failed to delete repository.\n" << RESET;
+        }
+        return;
+    }
+}
+
+void REPL::cmdSshOnly() {
+    std::cout << "\n" << BOLD + BLUE + "SSH Push (No API)" << RESET << "\n";
+    std::cout << std::string(40, '-') << "\n";
+    
+    std::cout << "Enter the path to your local git repository:\n";
+    std::cout << GRAY << "(press Enter to use current directory)\n" << RESET;
+    
+    char* input = readline("Path: ");
+    if (!input) return;
+    
+    std::string path = trim(input);
+    free(input);
+    
+    if (path.empty()) {
+        path = ".";
+    }
+    
+    if (!GitUtils::isGitRepo(path)) {
+        std::cout << RED << "Error: " << path << " is not a git repository\n" << RESET;
+        return;
+    }
+    
+    if (!GitUtils::hasRemote(path, "origin")) {
+        std::cout << RED << "Error: No 'origin' remote configured\n" << RESET;
+        return;
+    }
+    
+    std::cout << YELLOW << "Configuring SSH for GitHub...\n" << RESET;
+    GitUtils::configureSshForGitHub();
+    
+    auto branch = GitUtils::getCurrentBranch(path);
+    if (!branch.has_value()) {
+        std::cout << RED << "Error: Could not determine current branch\n" << RESET;
+        return;
+    }
+    
+    std::cout << "Pushing to origin/" << branch.value() << "...\n";
+    
+    if (GitUtils::push(path, "origin", branch.value())) {
+        std::cout << GREEN << "Pushed successfully!\n" << RESET;
+    } else {
+        std::cout << RED << "Push failed.\n" << RESET;
+    }
+}
+
 void REPL::runCommand(const std::string& input) {
     std::string cmd = trim(input);
     
@@ -259,6 +510,12 @@ void REPL::runCommand(const std::string& input) {
         printHelp();
     } else if (cmd == "create" || cmd == "c") {
         cmdCreate();
+    } else if (cmd == "list" || cmd == "l") {
+        cmdList();
+    } else if (cmd == "delete" || cmd == "d") {
+        cmdDelete();
+    } else if (cmd == "ssh" || cmd == "s") {
+        cmdSshOnly();
     } else if (cmd == "auth") {
         cmdAuth();
     } else if (!cmd.empty()) {
@@ -286,4 +543,6 @@ void REPL::run() {
         
         free(input);
     }
+    
+    saveHistory();
 }

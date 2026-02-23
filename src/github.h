@@ -5,6 +5,8 @@
 #include <optional>
 #include <vector>
 #include <utility>
+#include <unordered_map>
+#include <tuple>
 
 struct RepoInfo {
     std::string name;
@@ -22,6 +24,8 @@ public:
     std::string getUsername();
     bool createRepository(const RepoInfo& repo);
     bool repositoryExists(const std::string& name);
+    std::vector<RepoInfo> listRepositories();
+    bool deleteRepository(const std::string& name);
 
 private:
     std::string token_;
@@ -29,6 +33,9 @@ private:
     std::optional<std::string> username_;
     
     std::pair<int, std::string> request(const std::string& method, 
+                                         const std::string& path,
+                                         const std::string& body = "");
+    std::tuple<int, std::string, std::unordered_map<std::string, std::string>> requestWithHeaders(const std::string& method, 
                                          const std::string& path,
                                          const std::string& body = "");
 };

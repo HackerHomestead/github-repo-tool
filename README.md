@@ -1,20 +1,23 @@
 # gh-repo-create
 
-A modern C++ CLI tool for creating GitHub repositories from the command line, featuring an interactive REPL.
+A modern C++ CLI tool for creating and managing GitHub repositories from the command line, featuring an interactive REPL.
 
 ## Features
 
 - **Interactive REPL Mode** - Run without arguments to enter an interactive shell
 - **CLI Mode** - Use flags for scripting and automation
-- **GitHub API Integration** - Creates repos via GitHub REST API
-- **Git Push Support** - Automatically adds remote and pushes your code
+- **GitHub API Integration** - Creates, lists, and deletes repos via GitHub REST API
+- **SSH Push Support** - Automatically adds remote and pushes your code via SSH
+- **SSH-Only Mode** - Push to existing repos without GitHub API (no token needed)
 - **Token Authentication** - Securely stores your GitHub Personal Access Token
+- **Command History** - Persistent history across sessions (saved to `~/.gh-repo-create-history`)
+- **Tab Autocomplete** - Auto-complete commands and file paths
 
 ## Prerequisites (macOS)
 
 ```bash
-# Install CMake and pkg-config
-brew install cmake pkg-config
+# Install CMake and dependencies
+brew install cmake pkg-config openssl
 
 # readline is already installed on macOS
 ```
@@ -30,7 +33,7 @@ cd github-repo-tool
 mkdir build && cd build
 
 # Configure with CMake
-cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
+cmake ..
 
 # Build
 make -j4
@@ -46,6 +49,9 @@ make -j4
 
 Commands:
 - `create` (or `c`) - Create a new GitHub repository
+- `list` (or `l`) - List your GitHub repositories
+- `delete` (or `d`) - Delete a GitHub repository
+- `ssh` (or `s`) - Push via SSH only (no API calls)
 - `auth` - Manage authentication
 - `help` - Show help
 - `exit` - Exit the REPL
@@ -54,10 +60,19 @@ Commands:
 
 ```bash
 # Create a public repository and push
-./gh-repo -p ./my-project -n my-repo --public --push
+./gh-repo -p ./my-project -n my-repo --public
 
 # Create a private repository with description
-./gh-repo -p . -n new-repo -d "My project description" --private --push
+./gh-repo -p . -n new-repo -d "My project description" --private
+
+# List all repositories
+./gh-repo --list
+
+# Delete a repository
+./gh-repo --delete my-repo
+
+# Push via SSH only (no API, uses existing origin remote)
+./gh-repo --ssh-only -p .
 ```
 
 #### Options
@@ -69,7 +84,9 @@ Commands:
 | `-d, --description <d>` | Repository description (max 350 chars) |
 | `--public` | Make repository public |
 | `--private` | Make repository private |
-| `-P, --push` | Push to remote after creation |
+| `-l, --list` | List all your GitHub repositories |
+| `-D, --delete <name>` | Delete a repository by name |
+| `--ssh-only` | Skip GitHub API, just push via SSH |
 | `-h, --help` | Show help message |
 
 ## Authentication
@@ -89,11 +106,24 @@ Run `./gh-repo` and use the `auth` command to save your token locally.
 1. Go to https://github.com/settings/tokens
 2. Click "Generate new token (classic)"
 3. Select the `repo` scope
-4. Copy and use the token
+4. For delete functionality, also select `delete_repo`
+5. Copy and use the token
+
+## SSH Setup
+
+The tool uses SSH for git push operations. Make sure you have:
+
+1. An SSH key added to your GitHub account
+2. The SSH key added to your SSH agent:
+   ```bash
+   ssh-add ~/.ssh/id_ed25519
+   ```
 
 ## Configuration
 
-The tool stores your token in `~/.gh-repo-create.json`. You can also use the `GH_TOKEN` environment variable.
+- Token: `~/.gh-repo-create.json` or `GH_TOKEN` environment variable
+- History: `~/.gh-repo-create-history`
+- GitHub username fallback: `git config --global github.user <username>`
 
 ## License
 

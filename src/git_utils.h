@@ -7,6 +7,7 @@
 
 class GitUtils {
 public:
+    static void configureSshForGitHub();
     static bool isGitRepo(const std::string& path);
     static std::optional<std::string> getCurrentBranch(const std::string& path);
     static bool hasRemote(const std::string& path, const std::string& remoteName);

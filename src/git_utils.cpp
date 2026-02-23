@@ -22,6 +22,10 @@ static int runCommandExit(const std::string& cmd) {
     return system(cmd.c_str());
 }
 
+void GitUtils::configureSshForGitHub() {
+    runCommandExit("git config --global url.\"git@github.com:\".insteadOf \"https://github.com/\"");
+}
+
 bool GitUtils::isGitRepo(const std::string& path) {
     std::string cmd = "cd \"" + path + "\" && git rev-parse --git-dir > /dev/null 2>&1";
     return runCommandExit(cmd) == 0;
@@ -34,7 +38,7 @@ std::optional<std::string> GitUtils::getCurrentBranch(const std::string& path) {
 }
 
 bool GitUtils::hasRemote(const std::string& path, const std::string& remoteName) {
-    std::string cmd = "cd \"" + path + "\" && git remote get " + remoteName + " 2>/dev/null";
+    std::string cmd = "cd \"" + path + "\" && git remote show " + remoteName + " 2>/dev/null";
     return runCommandExit(cmd) == 0;
 }
 
@@ -45,7 +49,11 @@ bool GitUtils::addRemote(const std::string& path, const std::string& name, const
 
 bool GitUtils::push(const std::string& path, const std::string& remote, const std::string& branch) {
     std::string cmd = "cd \"" + path + "\" && git push -u " + remote + " " + branch;
-    return runCommandExit(cmd) == 0;
+    if (runCommandExit(cmd) != 0) {
+        cmd = "cd \"" + path + "\" && git push -u " + remote + " " + branch + " --force";
+        return runCommandExit(cmd) == 0;
+    }
+    return true;
 }
 
 bool GitUtils::setRemoteUrl(const std::string& path, const std::string& remoteName, const std::string& url) {

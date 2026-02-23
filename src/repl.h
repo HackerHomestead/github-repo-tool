@@ -19,6 +19,9 @@ private:
     bool ensureAuth();
     void cmdCreate();
     void cmdAuth();
+    void cmdList();
+    void cmdDelete();
+    void cmdSshOnly();
     void processRepoCreation(const std::string& path);
     
     std::unique_ptr<GitHubClient> client_;
