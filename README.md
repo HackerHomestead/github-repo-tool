@@ -49,16 +49,78 @@ make -j4
 ./gh-repo
 ```
 
-Commands:
-- `create` (or `c`) - Create a new GitHub repository
-- `list` (or `l`) - List your GitHub repositories
-- `delete` (or `d`) - Delete a GitHub repository
-- `ssh` (or `s`) - Push via SSH only (no API calls)
-- `check` - Check API and SSH connectivity
-- `debug` - Toggle debug mode (shows sanitized token info)
-- `auth` - Manage authentication
-- `help` - Show help
-- `exit` - Exit the REPL
+You will see a welcome banner:
+
+```
+  ____ _                 _ _    ____            _     ____            
+ / ___| | ___  ___ _   _| | | _/ ___| _   _ ___| |_  / ___| _   _ ___ 
+| |   | |/ _ \/ __| | | | | |/ \___ \| | | / __| __| \___ \| | | / __|
+| |___| |  __/ (__| |_| | |   |____) | |_| \__ \ |_  ____) | |_| \__ \
+ \____|_|\___|\___|\__,_|_|_|  |____/ \__, |___/\__| |____/ \__, |___/
+                                       |___/                |___/       
+  gh-repo-create v1.0.0 - GitHub Repository Creator
+  Type 'help' for available commands
+
+gh-repo> 
+```
+
+#### Commands
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `create` | `c` | Create a new GitHub repository |
+| `list` | `l` | List your GitHub repositories |
+| `delete` | `d` | Delete a GitHub repository |
+| `ssh` | `s` | Push via SSH only (no API calls) |
+| `check` | - | Check API and SSH connectivity |
+| `debug` | - | Toggle debug mode (shows sanitized token info) |
+| `auth` | - | Manage authentication |
+| `help` | `?` | Show help |
+| `exit` | `quit` | Exit the REPL |
+
+#### REPL Features
+
+- **Tab Autocomplete**: Press Tab to complete commands and file paths
+- **Command History**: Use arrow keys to navigate previous commands
+- **Persistent History**: Saved to `~/.gh-repo-create-history`
+
+#### REPL Examples
+
+```bash
+gh-repo> help
+Available commands:
+  create (c)  - Create a new GitHub repository
+  list (l)    - List your GitHub repositories
+  delete (d)  - Delete a GitHub repository
+  ssh         - Push via SSH only (no API calls)
+  auth        - Manage authentication
+  check       - Check API and SSH connectivity
+  debug       - Toggle debug mode
+  help        - Show this help message
+  exit        - Exit the REPL
+
+gh-repo> list
+Your Repositories:
+------------------------------------------------------------
+my-app [public]
+  https://github.com/username/my-app
+
+my-private-app [private]
+  My awesome project
+  https://github.com/username/my-private-app
+
+Total: 2 repository(ies)
+
+gh-repo> create
+Enter repository name: my-new-repo
+Enter description (optional): My new project
+Visibility (public/private) [public]: public
+Creating repository 'my-new-repo'...
+Repository created successfully!
+Pushed successfully!
+
+gh-repo> exit
+```
 
 ### CLI Mode
 
