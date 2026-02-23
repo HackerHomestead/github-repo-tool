@@ -16,10 +16,15 @@ public:
 private:
     void printBanner();
     void printHelp();
+    void printHelpCreate();
+    void printHelpList();
+    void printHelpDelete();
+    void printHelpSsh();
+    void printHelpAuth();
     bool ensureAuth();
     void cmdCreate();
     void cmdAuth();
-    void cmdList();
+    void cmdList(const std::string& filter = "");
     void cmdDelete();
     void cmdSshOnly();
     void processRepoCreation(const std::string& path);

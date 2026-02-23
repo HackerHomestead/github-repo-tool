@@ -183,6 +183,65 @@ void REPL::printHelp() {
     std::cout << "  " << GREEN << "auth" << RESET << "       - Manage authentication\n";
     std::cout << "  " << GREEN << "help" << RESET << "      - Show this help message\n";
     std::cout << "  " << GREEN << "exit" << RESET << "      - Exit the REPL\n";
+    std::cout << "\n" << GRAY << "Type 'help <command>' for detailed help on a specific command.\n" << RESET;
+}
+
+void REPL::printHelpCreate() {
+    std::cout << BOLD << "create (c) - Create a new GitHub repository\n\n" << RESET;
+    std::cout << "Usage: create [path]\n\n";
+    std::cout << "Arguments:\n";
+    std::cout << "  path     Path to local git repository (default: current directory)\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  create              # Create repo from current directory\n";
+    std::cout << "  create ./my-project # Create repo from specific path\n";
+    std::cout << "  c                   # Short form\n";
+}
+
+void REPL::printHelpList() {
+    std::cout << BOLD << "list (l) - List your GitHub repositories\n\n" << RESET;
+    std::cout << "Usage: list [filter]\n\n";
+    std::cout << "Arguments:\n";
+    std::cout << "  filter   Optional filter to match repository names\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  list                 # List all repositories\n";
+    std::cout << "  list foo             # List repos containing 'foo'\n";
+    std::cout << "  l                    # Short form\n";
+    std::cout << "\n" << GRAY << "Filter matches repositories containing the pattern in their name.\n" << RESET;
+}
+
+void REPL::printHelpDelete() {
+    std::cout << BOLD << "delete (d) - Delete a GitHub repository\n\n" << RESET;
+    std::cout << "Usage: delete\n\n";
+    std::cout << "Opens an interactive menu to select and delete a repository.\n";
+    std::cout << "Requires confirmation by typing the repository name.\n\n";
+    std::cout << "Note: Your token must have 'delete_repo' scope.\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  delete\n";
+    std::cout << "  d\n";
+}
+
+void REPL::printHelpSsh() {
+    std::cout << BOLD << "ssh (s) - Push via SSH only\n\n" << RESET;
+    std::cout << "Usage: ssh [path]\n\n";
+    std::cout << "Arguments:\n";
+    std::cout << "  path     Path to local git repository (default: current directory)\n\n";
+    std::cout << "This command pushes to an existing remote without using the GitHub API.\n";
+    std::cout << "Useful when you don't have a token but have SSH access set up.\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  ssh                  # Push from current directory\n";
+    std::cout << "  ssh ./my-project    # Push from specific path\n";
+    std::cout << "  s                    # Short form\n";
+}
+
+void REPL::printHelpAuth() {
+    std::cout << BOLD << "auth - Manage authentication\n\n" << RESET;
+    std::cout << "Usage: auth\n\n";
+    std::cout << "Prompts for a GitHub Personal Access Token and saves it locally.\n\n";
+    std::cout << "Token is stored in: ~/.gh-repo-create.json\n\n";
+    std::cout << "Required token scopes:\n";
+    std::cout << "  - repo: Create, list repositories\n";
+    std::cout << "  - delete_repo: Delete repositories\n\n";
+    std::cout << "Alternative: Set GH_TOKEN environment variable\n";
 }
 
 bool REPL::ensureAuth() {
@@ -367,7 +426,7 @@ void REPL::cmdCreate() {
     processRepoCreation(path);
 }
 
-void REPL::cmdList() {
+void REPL::cmdList(const std::string& filter) {
     if (!ensureAuth()) return;
     
     auto repos = client_->listRepositories();
@@ -377,10 +436,30 @@ void REPL::cmdList() {
         return;
     }
     
+    std::vector<RepoInfo> filtered;
+    if (!filter.empty()) {
+        std::string lowerFilter = filter;
+        std::transform(lowerFilter.begin(), lowerFilter.end(), lowerFilter.begin(), ::tolower);
+        for (const auto& repo : repos) {
+            std::string lowerName = repo.name;
+            std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+            if (lowerName.find(lowerFilter) != std::string::npos) {
+                filtered.push_back(repo);
+            }
+        }
+    } else {
+        filtered = repos;
+    }
+    
+    if (filtered.empty()) {
+        std::cout << YELLOW << "No repositories matching '" << filter << "'.\n" << RESET;
+        return;
+    }
+    
     std::cout << "\n" << BOLD << "Your Repositories:\n" << RESET;
     std::cout << std::string(60, '-') << "\n";
     
-    for (const auto& repo : repos) {
+    for (const auto& repo : filtered) {
         std::string visibility = repo.isPrivate ? RED + "private" + RESET : GREEN + "public" + RESET;
         std::cout << BOLD << repo.name << RESET << " [" << visibility << "]\n";
         if (!repo.description.empty()) {
@@ -390,7 +469,11 @@ void REPL::cmdList() {
         std::cout << "\n";
     }
     
-    std::cout << "Total: " << repos.size() << " repository(ies)\n";
+    std::cout << "Total: " << filtered.size() << " repository(ies)";
+    if (!filter.empty()) {
+        std::cout << " (filtered: '" << filter << "')";
+    }
+    std::cout << "\n";
 }
 
 void REPL::cmdDelete() {
@@ -503,23 +586,42 @@ void REPL::cmdSshOnly() {
 void REPL::runCommand(const std::string& input) {
     std::string cmd = trim(input);
     
-    if (cmd == "exit" || cmd == "quit") {
+    size_t spacePos = cmd.find(' ');
+    std::string command = spacePos == std::string::npos ? cmd : cmd.substr(0, spacePos);
+    std::string args = spacePos == std::string::npos ? "" : cmd.substr(spacePos + 1);
+    
+    if (command == "exit" || command == "quit") {
         running_ = false;
         std::cout << "Goodbye!\n";
-    } else if (cmd == "help" || cmd == "?") {
-        printHelp();
-    } else if (cmd == "create" || cmd == "c") {
+    } else if (command == "help" || command == "?") {
+        if (args == "create" || args == "c") {
+            printHelpCreate();
+        } else if (args == "list" || args == "l") {
+            printHelpList();
+        } else if (args == "delete" || args == "d") {
+            printHelpDelete();
+        } else if (args == "ssh" || args == "s") {
+            printHelpSsh();
+        } else if (args == "auth") {
+            printHelpAuth();
+        } else if (args.empty()) {
+            printHelp();
+        } else {
+            std::cout << RED << "Unknown help topic: " << args << "\n" << RESET;
+            std::cout << "Type 'help' for available commands\n";
+        }
+    } else if (command == "create" || command == "c") {
         cmdCreate();
-    } else if (cmd == "list" || cmd == "l") {
-        cmdList();
-    } else if (cmd == "delete" || cmd == "d") {
+    } else if (command == "list" || command == "l") {
+        cmdList(args);
+    } else if (command == "delete" || command == "d") {
         cmdDelete();
-    } else if (cmd == "ssh" || cmd == "s") {
+    } else if (command == "ssh" || command == "s") {
         cmdSshOnly();
-    } else if (cmd == "auth") {
+    } else if (command == "auth") {
         cmdAuth();
-    } else if (!cmd.empty()) {
-        std::cout << RED << "Unknown command: " << cmd << "\n" << RESET;
+    } else if (!command.empty()) {
+        std::cout << RED << "Unknown command: " << command << "\n" << RESET;
         std::cout << "Type 'help' for available commands\n";
     }
 }
